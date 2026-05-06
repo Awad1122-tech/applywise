@@ -1,0 +1,17 @@
+# Credentials - never commit these
+backend/credentials.json
+backend/token.json
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+
+# VS Code
+.vscode/

@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "ApplyWise",
+  "version": "1.0",
+  "description": "Never apply to the same job twice",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "https://*.linkedin.com/*",
+    "https://*.indeed.com/*",
+    "https://*.workday.com/*",
+    "https://*.greenhouse.io/*",
+    "https://*.lever.co/*",
+    "https://www.jobs.nhs.uk/*",
+    "https://www.civilservicejobs.service.gov.uk/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.linkedin.com/jobs/*",
+        "https://*.indeed.com/*",
+        "https://*.workday.com/*",
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://www.jobs.nhs.uk/*",
+        "https://www.civilservicejobs.service.gov.uk/*"
+      ],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ApplyWise"
+  }
+}
