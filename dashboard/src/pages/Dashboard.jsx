@@ -19,19 +19,6 @@ const PLATFORMS = [
 
 const CHART_COLORS = ['#534AB7','#EF9F27','#E24B4A','#1D9E75','#888780']
 
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, bg: '#f3f4f6', color: '#374151' }
-  return (
-    <span style={{
-      background: cfg.bg, color: cfg.color,
-      padding: '3px 10px', borderRadius: '20px',
-      fontSize: '12px', fontWeight: '600'
-    }}>
-      {cfg.label}
-    </span>
-  )
-}
-
 export default function Dashboard() {
   const [applications, setApplications] = useState([])
   const [analytics, setAnalytics] = useState(null)
@@ -39,7 +26,10 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [editApp, setEditApp] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [gmailImporting, setGmailImporting] = useState(false)
+  const [gmailResult, setGmailResult] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -49,18 +39,33 @@ export default function Dashboard() {
 
   const fetchAll = async () => {
     try {
-      const [apps, analytics, user] = await Promise.all([
+      const [apps, analyticsRes, userRes] = await Promise.all([
         client.get('/applications/'),
         client.get('/applications/analytics'),
         client.get('/auth/me'),
       ])
       setApplications(apps.data)
-      setAnalytics(analytics.data)
-      setUser(user.data)
+      setAnalytics(analyticsRes.data)
+      setUser(userRes.data)
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGmailImport = async () => {
+    setGmailImporting(true)
+    setGmailResult(null)
+    try {
+      const res = await client.post('/gmail/import?max_results=100')
+      setGmailResult({ success: true, message: res.data.message })
+      fetchAll()
+    } catch (err) {
+      setGmailResult({ success: false, message: 'Gmail import failed. Make sure you are authenticated.' })
+    } finally {
+      setGmailImporting(false)
+      setTimeout(() => setGmailResult(null), 5000)
     }
   }
 
@@ -124,22 +129,47 @@ export default function Dashboard() {
               border: '1.5px solid #534AB7', borderRadius: '8px',
               padding: '6px 14px', cursor: 'pointer', fontWeight: '500'
             }}
-          >
-            Sign out
-          </button>
+          >Sign out</button>
         </div>
       </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
 
         {/* Page header */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1a1a2e', margin: 0 }}>
-            My Applications
-          </h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
-            Track and manage all your job applications in one place
-          </p>
+        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1a1a2e', margin: 0 }}>My Applications</h1>
+            <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Track and manage all your job applications in one place</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            <button
+              onClick={handleGmailImport}
+              disabled={gmailImporting}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                background: gmailImporting ? '#f3f4f6' : 'white',
+                color: gmailImporting ? '#9ca3af' : '#374151',
+                border: '1.5px solid #e5e7eb', borderRadius: '10px',
+                padding: '8px 16px', fontSize: '13px', fontWeight: '600',
+                cursor: gmailImporting ? 'not-allowed' : 'pointer',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+              }}
+            >
+              <span>📧</span>
+              {gmailImporting ? 'Importing...' : 'Import from Gmail'}
+            </button>
+            {gmailResult && (
+              <div style={{
+                fontSize: '12px', fontWeight: '500',
+                color: gmailResult.success ? '#166534' : '#991B1B',
+                background: gmailResult.success ? '#F0FDF4' : '#FEF2F2',
+                border: `1px solid ${gmailResult.success ? '#bbf7d0' : '#fecaca'}`,
+                borderRadius: '8px', padding: '6px 12px', maxWidth: '280px', textAlign: 'right'
+              }}>
+                {gmailResult.success ? '✅' : '❌'} {gmailResult.message}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Stat cards */}
@@ -152,17 +182,11 @@ export default function Dashboard() {
               { label: 'Response rate', value: `${Math.round(analytics.response_rate * 100)}%`, color: '#854D0E', bg: '#FEF9C3' },
             ].map(stat => (
               <div key={stat.label} style={{
-                background: 'white', borderRadius: '14px',
-                padding: '1.25rem 1.5rem',
-                border: '1px solid #ede9fe',
-                boxShadow: '0 1px 3px rgba(83,74,183,0.06)'
+                background: 'white', borderRadius: '14px', padding: '1.25rem 1.5rem',
+                border: '1px solid #ede9fe', boxShadow: '0 1px 3px rgba(83,74,183,0.06)'
               }}>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {stat.label}
-                </p>
-                <p style={{ fontSize: '28px', fontWeight: '700', color: stat.color, margin: '6px 0 0' }}>
-                  {stat.value}
-                </p>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.label}</p>
+                <p style={{ fontSize: '28px', fontWeight: '700', color: stat.color, margin: '6px 0 0' }}>{stat.value}</p>
               </div>
             ))}
           </div>
@@ -175,17 +199,12 @@ export default function Dashboard() {
             border: '1px solid #ede9fe', marginBottom: '1.5rem',
             boxShadow: '0 1px 3px rgba(83,74,183,0.06)'
           }}>
-            <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', marginBottom: '1rem' }}>
-              Applications by status
-            </h2>
+            <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', marginBottom: '1rem' }}>Applications by status</h2>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} barSize={36}>
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: 'white', border: '1px solid #ede9fe', borderRadius: '10px', fontSize: '13px' }}
-                  cursor={{ fill: '#f3f0ff' }}
-                />
+                <Tooltip contentStyle={{ background: 'white', border: '1px solid #ede9fe', borderRadius: '10px', fontSize: '13px' }} cursor={{ fill: '#f3f0ff' }} />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Bar>
@@ -195,10 +214,7 @@ export default function Dashboard() {
         )}
 
         {/* Controls */}
-        <div style={{
-          display: 'flex', gap: '10px', marginBottom: '1rem',
-          flexWrap: 'wrap', alignItems: 'center'
-        }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             type="text"
             placeholder="🔍  Search company or role..."
@@ -207,8 +223,7 @@ export default function Dashboard() {
             style={{
               flex: 1, minWidth: '200px', padding: '9px 14px',
               border: '1.5px solid #e5e7eb', borderRadius: '10px',
-              fontSize: '13px', outline: 'none', color: '#1a1a2e',
-              background: 'white'
+              fontSize: '13px', outline: 'none', color: '#1a1a2e', background: 'white'
             }}
           />
           <select
@@ -232,9 +247,7 @@ export default function Dashboard() {
               borderRadius: '10px', padding: '9px 18px', fontSize: '13px',
               fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap'
             }}
-          >
-            + Add application
-          </button>
+          >+ Add application</button>
         </div>
 
         {/* Table */}
@@ -264,10 +277,7 @@ export default function Dashboard() {
                   </td>
                 </tr>
               ) : filtered.map((app, i) => (
-                <tr key={app.id} style={{
-                  borderTop: i > 0 ? '1px solid #f3f0ff' : 'none',
-                  transition: 'background 0.15s'
-                }}
+                <tr key={app.id} style={{ borderTop: i > 0 ? '1px solid #f3f0ff' : 'none', transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#faf9ff'}
                   onMouseLeave={e => e.currentTarget.style.background = 'white'}
                 >
@@ -297,29 +307,44 @@ export default function Dashboard() {
                     {new Date(app.applied_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
                   <td style={{ padding: '13px 16px' }}>
-                    <button
-                      onClick={() => handleDelete(app.id)}
-                      style={{
-                        background: 'none', border: 'none',
-                        color: '#ef4444', fontSize: '12px',
-                        cursor: 'pointer', fontWeight: '500'
-                      }}
-                    >
-                      Delete
-                    </button>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button
+                        onClick={() => setEditApp(app)}
+                        style={{
+                          background: 'none', border: 'none',
+                          color: '#534AB7', fontSize: '12px',
+                          cursor: 'pointer', fontWeight: '500'
+                        }}
+                      >Edit</button>
+                      <button
+                        onClick={() => handleDelete(app.id)}
+                        style={{
+                          background: 'none', border: 'none',
+                          color: '#ef4444', fontSize: '12px',
+                          cursor: 'pointer', fontWeight: '500'
+                        }}
+                      >Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
       </div>
 
       {showModal && (
         <AddModal
           onClose={() => setShowModal(false)}
           onAdded={() => { setShowModal(false); fetchAll() }}
+        />
+      )}
+
+      {editApp && (
+        <EditModal
+          app={editApp}
+          onClose={() => setEditApp(null)}
+          onSaved={() => { setEditApp(null); fetchAll() }}
         />
       )}
     </div>
@@ -354,6 +379,119 @@ function AddModal({ onClose, onAdded }) {
   }
 
   return (
+    <ModalShell title="Add application" onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Company *">
+            <input style={inputStyle} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} required placeholder="e.g. Google" />
+          </Field>
+          <Field label="Role *">
+            <input style={inputStyle} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required placeholder="e.g. Data Analyst" />
+          </Field>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Platform">
+            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}>
+              {PLATFORMS.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
+            </select>
+          </Field>
+          <Field label="Status">
+            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+              {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Location">
+            <input style={inputStyle} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. London, UK" />
+          </Field>
+          <Field label="Salary range">
+            <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
+          </Field>
+        </div>
+        <Field label="Notes">
+          <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '70px' }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
+        </Field>
+        <ModalButtons onCancel={onClose} loading={loading} submitLabel="Add application" />
+      </form>
+    </ModalShell>
+  )
+}
+
+function EditModal({ app, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    company: app.company || '',
+    role: app.role || '',
+    platform: app.platform || 'other',
+    status: app.status || 'applied',
+    location: app.location || '',
+    salary_range: app.salary_range || '',
+    notes: app.notes || '',
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await client.patch(`/applications/${app.id}`, form)
+      onSaved()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '9px 12px',
+    border: '1.5px solid #e5e7eb', borderRadius: '10px',
+    fontSize: '13px', outline: 'none', color: '#1a1a2e',
+    boxSizing: 'border-box', background: '#fafafa'
+  }
+
+  return (
+    <ModalShell title="Edit application" onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Company *">
+            <input style={inputStyle} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} required />
+          </Field>
+          <Field label="Role *">
+            <input style={inputStyle} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required />
+          </Field>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Platform">
+            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}>
+              {PLATFORMS.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
+            </select>
+          </Field>
+          <Field label="Status">
+            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+              {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Location">
+            <input style={inputStyle} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. London, UK" />
+          </Field>
+          <Field label="Salary range">
+            <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
+          </Field>
+        </div>
+        <Field label="Notes">
+          <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '70px' }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+        </Field>
+        <ModalButtons onCancel={onClose} loading={loading} submitLabel="Save changes" />
+      </form>
+    </ModalShell>
+  )
+}
+
+function ModalShell({ title, onClose, children }) {
+  return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(26,26,46,0.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -365,76 +503,37 @@ function AddModal({ onClose, onAdded }) {
         boxShadow: '0 20px 60px rgba(83,74,183,0.2)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h2 style={{ fontSize: '17px', fontWeight: '700', color: '#1a1a2e', margin: 0 }}>Add application</h2>
+          <h2 style={{ fontSize: '17px', fontWeight: '700', color: '#1a1a2e', margin: 0 }}>{title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#6b7280' }}>×</button>
         </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Company *</label>
-              <input style={inputStyle} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} required placeholder="e.g. Google" />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Role *</label>
-              <input style={inputStyle} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required placeholder="e.g. Data Analyst" />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Platform</label>
-              <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}>
-                {PLATFORMS.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Status</label>
-              <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Location</label>
-              <input style={inputStyle} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. London, UK" />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Salary range</label>
-              <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>Notes</label>
-            <textarea
-              style={{ ...inputStyle, resize: 'vertical', minHeight: '70px' }}
-              value={form.notes}
-              onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Any notes about this application..."
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-            <button type="button" onClick={onClose} style={{
-              flex: 1, padding: '10px', border: '1.5px solid #e5e7eb',
-              borderRadius: '10px', fontSize: '13px', fontWeight: '500',
-              cursor: 'pointer', background: 'white', color: '#374151'
-            }}>
-              Cancel
-            </button>
-            <button type="submit" disabled={loading} style={{
-              flex: 1, padding: '10px', background: '#534AB7',
-              color: 'white', border: 'none', borderRadius: '10px',
-              fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-            }}>
-              {loading ? 'Adding...' : 'Add application'}
-            </button>
-          </div>
-        </form>
+        {children}
       </div>
+    </div>
+  )
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '5px' }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function ModalButtons({ onCancel, loading, submitLabel }) {
+  return (
+    <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+      <button type="button" onClick={onCancel} style={{
+        flex: 1, padding: '10px', border: '1.5px solid #e5e7eb',
+        borderRadius: '10px', fontSize: '13px', fontWeight: '500',
+        cursor: 'pointer', background: 'white', color: '#374151'
+      }}>Cancel</button>
+      <button type="submit" disabled={loading} style={{
+        flex: 1, padding: '10px', background: '#534AB7',
+        color: 'white', border: 'none', borderRadius: '10px',
+        fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+      }}>{loading ? 'Saving...' : submitLabel}</button>
     </div>
   )
 }

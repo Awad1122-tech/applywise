@@ -1,36 +1,18 @@
-import base64
 import re
 from datetime import datetime
 from googleapiclient.discovery import build
 from app.gmail_auth import get_gmail_credentials
 
 
-# Keywords that suggest a job application email
 APPLICATION_KEYWORDS = [
-    "application received",
-    "thank you for applying",
-    "thanks for applying",
-    "we have received your application",
-    "your application has been received",
-    "application confirmation",
-    "application submitted",
-    "you applied for",
-    "application for",
-    "job application",
-    "we received your cv",
-    "we received your resume",
-    "shortlisted",
-    "interview invitation",
-    "invite you to interview",
-    "unfortunately",
-    "not successful",
-    "not been selected",
-    "application unsuccessful",
-    "regret to inform",
-    "position has been filled",
-    "offer of employment",
-    "pleased to offer",
-    "job offer",
+    "application received", "thank you for applying", "thanks for applying",
+    "we have received your application", "your application has been received",
+    "application confirmation", "application submitted", "you applied for",
+    "application for", "job application", "we received your cv",
+    "we received your resume", "shortlisted", "interview invitation",
+    "invite you to interview", "unfortunately", "not successful",
+    "not been selected", "application unsuccessful", "regret to inform",
+    "position has been filled", "offer of employment", "pleased to offer", "job offer",
 ]
 
 STATUS_PATTERNS = {
@@ -68,19 +50,58 @@ JOB_BOARD_DOMAINS = {
     "applytojob", "smartrecruiters", "lever", "jobvite",
 }
 
+PLATFORM_DOMAIN_MAP = {
+    "linkedin": "linkedin", "indeed": "indeed", "greenhouse": "greenhouse",
+    "lever": "lever", "workday": "workday", "myworkday": "workday",
+    "taleo": "taleo", "successfactors": "successfactors",
+    "smartrecruiters": "greenhouse", "jobvite": "greenhouse",
+    "reed": "reed", "totaljobs": "totaljobs",
+    "cv-library": "cv_library", "cvlibrary": "cv_library",
+    "brightnetwork": "brightnetwork", "gradcracker": "gradcracker",
+    "prospects": "prospects", "milkround": "milkround",
+    "nhsjobs": "nhs_jobs", "jobs.nhs": "nhs_jobs",
+    "civilservice": "civil_service", "civil-service": "civil_service",
+}
+
+PLATFORM_SUBJECT_MAP = {
+    "nhs jobs": "nhs_jobs", "nhs job": "nhs_jobs",
+    "civil service": "civil_service", "linkedin": "linkedin",
+    "indeed": "indeed", "reed": "reed", "totaljobs": "totaljobs",
+    "brightnetwork": "brightnetwork", "gradcracker": "gradcracker",
+    "workday": "workday", "greenhouse": "greenhouse",
+    "successfactors": "successfactors",
+}
+
+# Known applicant names to strip from job titles
+APPLICANT_NAME_PATTERN = re.compile(
+    r'\s*[-–]\s*(?:Awad\s+Pervez|Awad)\s*$', re.IGNORECASE
+)
+
 
 def get_gmail_service():
     creds = get_gmail_credentials()
     return build("gmail", "v1", credentials=creds)
 
 
-def detect_status(subject: str, body: str) -> str:
-    text = (subject + " " + body).lower()
+def detect_status(subject: str) -> str:
+    text = subject.lower()
     for status, keywords in STATUS_PATTERNS.items():
         for keyword in keywords:
             if keyword in text:
                 return status
     return "Applied"
+
+
+def detect_platform(sender: str, subject: str) -> str:
+    sender_lower = sender.lower()
+    subject_lower = subject.lower()
+    for domain_key, platform in PLATFORM_DOMAIN_MAP.items():
+        if domain_key in sender_lower:
+            return platform
+    for keyword, platform in PLATFORM_SUBJECT_MAP.items():
+        if keyword in subject_lower:
+            return platform
+    return "other"
 
 
 def clean_company_name(name: str) -> str:
@@ -93,7 +114,20 @@ def clean_company_name(name: str) -> str:
     return name
 
 
-def extract_company_from_email(sender: str, subject: str, body: str) -> str:
+def clean_job_title(title: str) -> str:
+    """Remove applicant name, reference numbers and noise from job title."""
+    # Remove applicant name suffix
+    title = APPLICANT_NAME_PATTERN.sub("", title).strip()
+    # Remove "the position of" prefix
+    title = re.sub(r"^the\s+position\s+of\s+", "", title, flags=re.IGNORECASE).strip()
+    # Remove reference numbers like "Req 56865"
+    title = re.sub(r"\s+(?:req|ref|job|vacancy|id)[\s#:]*\d+\s*$", "", title, flags=re.IGNORECASE).strip()
+    # Remove " at CompanyName" suffix
+    title = re.sub(r"\s+at\s+[A-Z][A-Za-z\s]+$", "", title).strip()
+    return title[:80]
+
+
+def extract_company_from_email(sender: str, subject: str) -> str:
     sender_match = re.match(r'^"?([^"<]+)"?\s*<', sender)
     if sender_match:
         sender_name = sender_match.group(1).strip()
@@ -132,24 +166,24 @@ def extract_company_from_email(sender: str, subject: str, body: str) -> str:
     return "Unknown Company"
 
 
-def extract_job_title(subject: str, body: str) -> str:
+def extract_job_title(subject: str) -> str:
     patterns = [
         r"(?:application for|applied for|role of|position of|vacancy for|job title[:\s]+)\s*[:\-]?\s*([^\n\r,\.]{5,60})",
         r"(?:re:|fw:)?\s*([A-Z][A-Za-z\s\-\/]+(?:Manager|Engineer|Developer|Analyst|Officer|Assistant|Coordinator|Specialist|Nurse|Doctor|Administrator|Director|Lead|Senior|Junior)[A-Za-z\s\-]*)",
     ]
     for pattern in patterns:
-        match = re.search(pattern, subject + " " + body[:500], re.IGNORECASE)
+        match = re.search(pattern, subject, re.IGNORECASE)
         if match:
             title = match.group(1).strip()
             if 3 < len(title) < 80:
-                return title
+                return clean_job_title(title)
 
     clean_subject = re.sub(
         r"^(re:|fw:|fwd:|your application|application confirmation)[:\s]*",
         "", subject, flags=re.IGNORECASE,
     ).strip()
     if clean_subject:
-        return clean_subject[:80]
+        return clean_job_title(clean_subject)
 
     return "Unknown Role"
 
@@ -160,10 +194,7 @@ def is_job_application_email(subject: str) -> bool:
 
 
 def fetch_job_emails(max_results: int = 50) -> list[dict]:
-    """
-    Fetch and parse job application emails from Gmail.
-    Uses metadata-only mode for speed.
-    """
+    """Fetch and parse job application emails from Gmail. Uses metadata-only mode for speed."""
     service = get_gmail_service()
 
     query = (
@@ -207,9 +238,10 @@ def fetch_job_emails(max_results: int = 50) -> list[dict]:
             if not is_job_application_email(subject):
                 continue
 
-            company = extract_company_from_email(sender, subject, "")
-            job_title = extract_job_title(subject, "")
-            status = detect_status(subject, "")
+            company = extract_company_from_email(sender, subject)
+            job_title = extract_job_title(subject)
+            status = detect_status(subject)
+            platform = detect_platform(sender, subject)
 
             applied_date = None
             try:
@@ -231,6 +263,7 @@ def fetch_job_emails(max_results: int = 50) -> list[dict]:
                 "company": company,
                 "job_title": job_title,
                 "status": status,
+                "platform": platform,
                 "applied_date": applied_date,
                 "source": "Gmail",
                 "notes": f"Auto-imported from Gmail. Subject: {subject[:100]}",
