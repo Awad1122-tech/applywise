@@ -35,6 +35,26 @@ export default function Dashboard() {
   useEffect(() => {
     if (!localStorage.getItem('token')) { navigate('/login'); return }
     fetchAll()
+
+    // Handle Gmail OAuth callback
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('gmail') === 'connected') {
+      setGmailResult({ success: true, message: 'Gmail connected! Importing your jobs now...' })
+      window.history.replaceState({}, '', '/')
+      // Auto import after connecting
+      setTimeout(async () => {
+        try {
+          const res = await client.post('/gmail/import?max_results=100')
+          setGmailResult({ success: true, message: res.data.message })
+          fetchAll()
+        } catch (err) {
+          setGmailResult({ success: false, message: 'Import failed. Please try again.' })
+        }
+      }, 1000)
+    } else if (params.get('gmail') === 'error') {
+      setGmailResult({ success: false, message: 'Gmail connection failed. Please try again.' })
+      window.history.replaceState({}, '', '/')
+    }
   }, [])
 
   const fetchAll = async () => {
@@ -58,11 +78,22 @@ export default function Dashboard() {
     setGmailImporting(true)
     setGmailResult(null)
     try {
+      // Check if Gmail is connected
+      const authStatus = await client.get('/gmail/auth-status')
+
+      if (!authStatus.data.authenticated) {
+        // Not connected — get OAuth URL and redirect
+        const urlRes = await client.get('/gmail/oauth/url')
+        window.location.href = urlRes.data.url
+        return
+      }
+
+      // Gmail connected — import directly
       const res = await client.post('/gmail/import?max_results=100')
       setGmailResult({ success: true, message: res.data.message })
       fetchAll()
     } catch (err) {
-      setGmailResult({ success: false, message: 'Gmail import failed. Make sure you are authenticated.' })
+      setGmailResult({ success: false, message: 'Gmail import failed. Please try again.' })
     } finally {
       setGmailImporting(false)
       setTimeout(() => setGmailResult(null), 5000)

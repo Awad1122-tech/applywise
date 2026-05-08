@@ -54,6 +54,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     applications = relationship("Application", back_populates="user", cascade="all, delete-orphan")
+    blocklist = relationship("EmailBlocklist", back_populates="user", cascade="all, delete-orphan")
 
 
 class Application(Base):
@@ -95,3 +96,15 @@ class StatusHistory(Base):
     note = Column(Text, nullable=True)
 
     application = relationship("Application", back_populates="status_history")
+
+
+class EmailBlocklist(Base):
+    __tablename__ = "email_blocklist"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    gmail_message_id = Column(String(255), nullable=False, index=True)
+    reason = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="blocklist")

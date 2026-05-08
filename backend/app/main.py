@@ -12,6 +12,7 @@ app = FastAPI(
     title="ApplyWise API",
     description="UK job application tracker — never apply twice",
     version="0.1.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(

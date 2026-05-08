@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.database import get_db
-from app.models import Application, StatusHistory, ApplicationStatus, Platform, User
+from app.models import Application, StatusHistory, ApplicationStatus, Platform, User, EmailBlocklist
 from app.schemas import ApplicationCreate, ApplicationUpdate, ApplicationOut, AnalyticsSummary
 from app.routers.auth import get_current_user
 from app.utils.fingerprint import make_fingerprint
@@ -156,6 +156,21 @@ def delete_application(
     current_user: User = Depends(get_current_user),
 ):
     app = _get_or_404(db, app_id, current_user.id)
+
+    # If this was auto-imported from Gmail, add to blocklist so it never comes back
+    if app.auto_detected and app.source_email_id:
+        already_blocked = db.query(EmailBlocklist).filter(
+            EmailBlocklist.user_id == current_user.id,
+            EmailBlocklist.gmail_message_id == app.source_email_id,
+        ).first()
+
+        if not already_blocked:
+            db.add(EmailBlocklist(
+                user_id=current_user.id,
+                gmail_message_id=app.source_email_id,
+                reason="deleted by user",
+            ))
+
     db.delete(app)
     db.commit()
 

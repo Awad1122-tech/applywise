@@ -1,5 +1,5 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  
+
   if (message.type === "GET_TOKEN") {
     chrome.storage.local.get(["token"], (result) => {
       sendResponse({ token: result.token || null });
@@ -21,4 +21,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Keep service worker alive
+  if (message.type === "PING") {
+    sendResponse({ pong: true });
+    return true;
+  }
+
+});
+
+// Prevent service worker from going inactive
+chrome.runtime.onInstalled.addListener(() => {
+  console.log("ApplyWise background ready");
 });

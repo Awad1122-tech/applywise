@@ -1,8 +1,8 @@
-const API = "http://127.0.0.1:8000";
+const API = "http://127.0.0.1:8001";
 
 async function getToken() {
   return new Promise(resolve => {
-    chrome.runtime.sendMessage({ type: "GET_TOKEN" }, res => resolve(res.token));
+    chrome.runtime.sendMessage({ type: "GET_TOKEN" }, res => resolve(res?.token || null));
   });
 }
 
