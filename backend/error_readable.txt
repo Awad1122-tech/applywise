@@ -1,0 +1,13 @@
+﻿uvicorn : INFO:     Started server process [20436]
+At line:1 char:1
++ uvicorn app.main:app --port 8001 --log-level debug 2>&1 | Tee-Object  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO:     Started server process [20436]:String) [], Remo 
+   teException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:64142 - "GET /gmail/auth-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64142 - "POST /gmail/import?max_results=100 HTTP/1.1" 500 Internal Server Error

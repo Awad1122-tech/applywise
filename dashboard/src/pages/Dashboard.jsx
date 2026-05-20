@@ -11,13 +11,41 @@ const STATUS_CONFIG = {
   withdrawn:  { label: 'Withdrawn',  bg: '#F3F4F6', color: '#374151' },
 }
 
-const PLATFORMS = [
-  'linkedin','indeed','brightnetwork','gradcracker','prospects',
-  'milkround','totaljobs','reed','cv_library','nhs_jobs',
-  'civil_service','workday','greenhouse','taleo','successfactors','direct','other'
+const CHART_COLORS = ['#534AB7','#EF9F27','#E24B4A','#1D9E75','#888780']
+
+const QUICK_FILTERS = [
+  { label: 'All time', value: 'all' },
+  { label: 'This week', value: 'week' },
+  { label: 'This month', value: 'month' },
+  { label: 'Last 3 months', value: '3months' },
+  { label: 'Last 6 months', value: '6months' },
 ]
 
-const CHART_COLORS = ['#534AB7','#EF9F27','#E24B4A','#1D9E75','#888780']
+function getQuickFilterDates(value) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (value === 'all') return { from: null, to: null }
+  if (value === 'week') {
+    const from = new Date(today)
+    from.setDate(today.getDate() - today.getDay())
+    return { from, to: now }
+  }
+  if (value === 'month') {
+    const from = new Date(today.getFullYear(), today.getMonth(), 1)
+    return { from, to: now }
+  }
+  if (value === '3months') {
+    const from = new Date(today)
+    from.setMonth(today.getMonth() - 3)
+    return { from, to: now }
+  }
+  if (value === '6months') {
+    const from = new Date(today)
+    from.setMonth(today.getMonth() - 6)
+    return { from, to: now }
+  }
+  return { from: null, to: null }
+}
 
 export default function Dashboard() {
   const [applications, setApplications] = useState([])
@@ -25,6 +53,9 @@ export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [quickFilter, setQuickFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editApp, setEditApp] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -35,13 +66,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!localStorage.getItem('token')) { navigate('/login'); return }
     fetchAll()
-
-    // Handle Gmail OAuth callback
     const params = new URLSearchParams(window.location.search)
     if (params.get('gmail') === 'connected') {
       setGmailResult({ success: true, message: 'Gmail connected! Importing your jobs now...' })
       window.history.replaceState({}, '', '/')
-      // Auto import after connecting
       setTimeout(async () => {
         try {
           const res = await client.post('/gmail/import?max_results=100')
@@ -78,17 +106,12 @@ export default function Dashboard() {
     setGmailImporting(true)
     setGmailResult(null)
     try {
-      // Check if Gmail is connected
       const authStatus = await client.get('/gmail/auth-status')
-
       if (!authStatus.data.authenticated) {
-        // Not connected — get OAuth URL and redirect
         const urlRes = await client.get('/gmail/oauth/url')
         window.location.href = urlRes.data.url
         return
       }
-
-      // Gmail connected — import directly
       const res = await client.post('/gmail/import?max_results=100')
       setGmailResult({ success: true, message: res.data.message })
       fetchAll()
@@ -111,16 +134,62 @@ export default function Dashboard() {
     fetchAll()
   }
 
+  const handleQuickFilter = (value) => {
+    setQuickFilter(value)
+    setDateFrom('')
+    setDateTo('')
+  }
+
+  const handleCustomDate = (field, value) => {
+    setQuickFilter('custom')
+    if (field === 'from') setDateFrom(value)
+    else setDateTo(value)
+  }
+
+  const handleExportCSV = () => {
+    const headers = ['Company', 'Role', 'Status', 'Applied Date', 'Notes']
+    const rows = filtered.map(app => [
+      app.company,
+      app.role,
+      STATUS_CONFIG[app.status]?.label || app.status,
+      new Date(app.applied_at).toLocaleDateString('en-GB'),
+      (app.notes || '').replace(/,/g, ';').replace(/\n/g, ' ')
+    ])
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `applications_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const filtered = applications.filter(app => {
     const s = search.toLowerCase()
     const matchSearch = !s || app.company.toLowerCase().includes(s) || app.role.toLowerCase().includes(s)
     const matchStatus = !statusFilter || app.status === statusFilter
-    return matchSearch && matchStatus
+
+    let matchDate = true
+    const appDate = new Date(app.applied_at)
+
+    if (quickFilter === 'custom') {
+      if (dateFrom) matchDate = matchDate && appDate >= new Date(dateFrom)
+      if (dateTo) matchDate = matchDate && appDate <= new Date(dateTo + 'T23:59:59')
+    } else if (quickFilter !== 'all') {
+      const { from, to } = getQuickFilterDates(quickFilter)
+      if (from) matchDate = matchDate && appDate >= from
+      if (to) matchDate = matchDate && appDate <= to
+    }
+
+    return matchSearch && matchStatus && matchDate
   })
 
   const chartData = analytics
     ? Object.entries(analytics.by_status).map(([k, v]) => ({
-        name: STATUS_CONFIG[k]?.label || k, value: v
+        name: STATUS_CONFIG[k]?.label || k,
+        value: v,
+        color: STATUS_CONFIG[k]?.color || '#888780'
       }))
     : []
 
@@ -237,12 +306,75 @@ export default function Dashboard() {
                 <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: 'white', border: '1px solid #ede9fe', borderRadius: '10px', fontSize: '13px' }} cursor={{ fill: '#f3f0ff' }} />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
+
+        {/* Date Filters */}
+        <div style={{
+          background: 'white', borderRadius: '14px', padding: '1rem 1.5rem',
+          border: '1px solid #ede9fe', marginBottom: '1rem',
+          boxShadow: '0 1px 3px rgba(83,74,183,0.06)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filter by date:</span>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {QUICK_FILTERS.map(f => (
+                <button
+                  key={f.value}
+                  onClick={() => handleQuickFilter(f.value)}
+                  style={{
+                    padding: '5px 12px', borderRadius: '20px', fontSize: '12px',
+                    fontWeight: '600', cursor: 'pointer', border: '1.5px solid',
+                    borderColor: quickFilter === f.value ? '#534AB7' : '#e5e7eb',
+                    background: quickFilter === f.value ? '#534AB7' : 'white',
+                    color: quickFilter === f.value ? 'white' : '#6b7280',
+                    transition: 'all 0.15s'
+                  }}
+                >{f.label}</button>
+              ))}
+            </div>
+            <div style={{ width: '1px', height: '24px', background: '#e5e7eb' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => handleCustomDate('from', e.target.value)}
+                style={{
+                  padding: '5px 10px', border: '1.5px solid',
+                  borderColor: quickFilter === 'custom' ? '#534AB7' : '#e5e7eb',
+                  borderRadius: '8px', fontSize: '12px', outline: 'none',
+                  color: '#1a1a2e', cursor: 'pointer'
+                }}
+              />
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => handleCustomDate('to', e.target.value)}
+                style={{
+                  padding: '5px 10px', border: '1.5px solid',
+                  borderColor: quickFilter === 'custom' ? '#534AB7' : '#e5e7eb',
+                  borderRadius: '8px', fontSize: '12px', outline: 'none',
+                  color: '#1a1a2e', cursor: 'pointer'
+                }}
+              />
+              {quickFilter === 'custom' && (dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setQuickFilter('all'); setDateFrom(''); setDateTo('') }}
+                  style={{
+                    padding: '5px 10px', borderRadius: '8px', fontSize: '12px',
+                    fontWeight: '600', cursor: 'pointer', border: '1.5px solid #e5e7eb',
+                    background: 'white', color: '#ef4444'
+                  }}
+                >Clear</button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Controls */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -272,6 +404,14 @@ export default function Dashboard() {
             ))}
           </select>
           <button
+            onClick={handleExportCSV}
+            style={{
+              background: 'white', color: '#534AB7', border: '1.5px solid #534AB7',
+              borderRadius: '10px', padding: '9px 18px', fontSize: '13px',
+              fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap'
+            }}
+          >⬇ Export CSV</button>
+          <button
             onClick={() => setShowModal(true)}
             style={{
               background: '#534AB7', color: 'white', border: 'none',
@@ -279,6 +419,11 @@ export default function Dashboard() {
               fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap'
             }}
           >+ Add application</button>
+        </div>
+
+        {/* Results count */}
+        <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>
+          Showing <strong>{filtered.length}</strong> of <strong>{applications.length}</strong> applications
         </div>
 
         {/* Table */}
@@ -290,7 +435,7 @@ export default function Dashboard() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#faf9ff', borderBottom: '1px solid #ede9fe' }}>
-                {['Company', 'Role', 'Platform', 'Status', 'Applied', 'Actions'].map(h => (
+                {['Company', 'Role', 'Status', 'Applied', 'Actions'].map(h => (
                   <th key={h} style={{
                     textAlign: 'left', padding: '12px 16px',
                     color: '#6b7280', fontWeight: '600', fontSize: '12px',
@@ -302,9 +447,9 @@ export default function Dashboard() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '3rem', color: '#9ca3af' }}>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '3rem', color: '#9ca3af' }}>
                     <div style={{ fontSize: '32px', marginBottom: '8px' }}>📋</div>
-                    <p>No applications yet. Add your first one!</p>
+                    <p>No applications found for the selected filters.</p>
                   </td>
                 </tr>
               ) : filtered.map((app, i) => (
@@ -314,9 +459,6 @@ export default function Dashboard() {
                 >
                   <td style={{ padding: '13px 16px', fontWeight: '600', color: '#1a1a2e' }}>{app.company}</td>
                   <td style={{ padding: '13px 16px', color: '#4b5563' }}>{app.role}</td>
-                  <td style={{ padding: '13px 16px', color: '#6b7280', textTransform: 'capitalize' }}>
-                    {app.platform.replace(/_/g, ' ')}
-                  </td>
                   <td style={{ padding: '13px 16px' }}>
                     <select
                       value={app.status}
@@ -421,25 +563,18 @@ function AddModal({ onClose, onAdded }) {
           </Field>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <Field label="Platform">
-            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}>
-              {PLATFORMS.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
-            </select>
-          </Field>
           <Field label="Status">
             <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
               {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </Field>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <Field label="Location">
             <input style={inputStyle} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. London, UK" />
           </Field>
-          <Field label="Salary range">
-            <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
-          </Field>
         </div>
+        <Field label="Salary range">
+          <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
+        </Field>
         <Field label="Notes">
           <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '70px' }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
         </Field>
@@ -493,25 +628,18 @@ function EditModal({ app, onClose, onSaved }) {
           </Field>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <Field label="Platform">
-            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}>
-              {PLATFORMS.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
-            </select>
-          </Field>
           <Field label="Status">
             <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
               {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </Field>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <Field label="Location">
             <input style={inputStyle} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. London, UK" />
           </Field>
-          <Field label="Salary range">
-            <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
-          </Field>
         </div>
+        <Field label="Salary range">
+          <input style={inputStyle} value={form.salary_range} onChange={e => setForm({ ...form, salary_range: e.target.value })} placeholder="e.g. £30k–£40k" />
+        </Field>
         <Field label="Notes">
           <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '70px' }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
         </Field>

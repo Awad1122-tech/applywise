@@ -1,304 +1,228 @@
 const API_URL = "http://127.0.0.1:8001";
 
-// ─── Platform Definitions ───────────────────────────────────────────────────
+async function getToken() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(["token"], (result) => {
+      resolve(result.token || null)
+    })
+  })
+}
 
-const platforms = {
+function parseFromTitle() {
+  const title = document.title || ""
 
-  linkedin: {
-    match: () => window.location.href.includes("linkedin.com/jobs"),
-    getJob: () => {
-      const company =
-        document.querySelector(".job-details-jobs-unified-top-card__company-name a")?.innerText?.trim() ||
-        document.querySelector(".job-details-jobs-unified-top-card__company-name")?.innerText?.trim() ||
-        document.querySelector("[data-tracking-control-name='public_jobs_topcard-org-name']")?.innerText?.trim() ||
-        document.querySelector(".topcard__org-name-link")?.innerText?.trim() ||
-        document.querySelector(".jobs-unified-top-card__company-name")?.innerText?.trim();
+  const genericWords = [
+    "jobs", "job", "careers", "career", "graduate", "graduates",
+    "vacancy", "vacancies", "recruitment", "hiring", "work", "employment",
+    "gradcracker", "indeed", "linkedin", "reed", "totaljobs", "monster",
+    "glassdoor", "brightnetwork", "prospects", "milkround", "stem",
+    "students", "careers for stem students", "find your perfect job"
+  ]
 
-      const role =
-        document.querySelector(".job-details-jobs-unified-top-card__job-title h1")?.innerText?.trim() ||
-        document.querySelector(".job-details-jobs-unified-top-card__job-title")?.innerText?.trim() ||
-        document.querySelector(".jobs-unified-top-card__job-title")?.innerText?.trim() ||
-        document.querySelector("h1.topcard__title")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "linkedin" };
-    },
-    applyButton: () =>
-      document.querySelector(".jobs-apply-button--top-card button") ||
-      document.querySelector("[data-control-name='jobdetails_topcard_inapply']") ||
-      document.querySelector(".jobs-apply-button") ||
-      Array.from(document.querySelectorAll("button")).find(b =>
-        b.innerText?.toLowerCase().includes("easy apply") ||
-        b.innerText?.toLowerCase().includes("apply now")
-      ),
-  },
-
-  indeed: {
-    match: () => window.location.href.includes("indeed.com"),
-    getJob: () => {
-      const company =
-        document.querySelector("[data-company-name]")?.innerText?.trim() ||
-        document.querySelector(".jobsearch-CompanyInfoWithoutHeaderImage")?.innerText?.trim() ||
-        document.querySelector(".css-1ioi40n")?.innerText?.trim() ||
-        document.querySelector("[data-testid='inlineHeader-companyName']")?.innerText?.trim() ||
-        document.querySelector(".jobsearch-InlineCompanyRating-companyHeader")?.innerText?.trim();
-
-      const role =
-        document.querySelector(".jobsearch-JobInfoHeader-title")?.innerText?.trim() ||
-        document.querySelector("[data-testid='jobsearch-JobInfoHeader-title']")?.innerText?.trim() ||
-        document.querySelector(".css-1b02lze")?.innerText?.trim() ||
-        document.querySelector("h1.jobsearch-JobInfoHeader-title")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "indeed" };
-    },
-    applyButton: () =>
-      document.querySelector("#indeedApplyButton") ||
-      document.querySelector("[data-testid='IndeedApplyButton']") ||
-      document.querySelector(".jobsearch-IndeedApplyButton-newDesign") ||
-      Array.from(document.querySelectorAll("button")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now") ||
-        b.innerText?.toLowerCase().includes("apply on company site")
-      ),
-  },
-
-  reed: {
-    match: () => window.location.href.includes("reed.co.uk"),
-    getJob: () => {
-      const company =
-        document.querySelector("[data-qa='publisher-link']")?.innerText?.trim() ||
-        document.querySelector(".recruiter-details h3")?.innerText?.trim() ||
-        document.querySelector(".employer-name")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1[data-qa='job-title']")?.innerText?.trim() ||
-        document.querySelector("h1.job-header__title")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "reed" };
-    },
-    applyButton: () =>
-      document.querySelector("[data-qa='apply-button']") ||
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now") ||
-        b.innerText?.toLowerCase().includes("apply for this job")
-      ),
-  },
-
-  totaljobs: {
-    match: () => window.location.href.includes("totaljobs.com"),
-    getJob: () => {
-      const company =
-        document.querySelector(".job-header__company-name")?.innerText?.trim() ||
-        document.querySelector("[itemprop='hiringOrganization'] [itemprop='name']")?.innerText?.trim() ||
-        document.querySelector(".employer-name")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1.job-header__title")?.innerText?.trim() ||
-        document.querySelector("h1[itemprop='title']")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "totaljobs" };
-    },
-    applyButton: () =>
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now") ||
-        b.innerText?.toLowerCase().includes("apply for this job")
-      ),
-  },
-
-  cvlibrary: {
-    match: () => window.location.href.includes("cv-library.co.uk"),
-    getJob: () => {
-      const company =
-        document.querySelector(".company-name")?.innerText?.trim() ||
-        document.querySelector("[itemprop='hiringOrganization']")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1.job-title")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "cv_library" };
-    },
-    applyButton: () =>
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now")
-      ),
-  },
-
-  workday: {
-    match: () => window.location.href.includes("workday.com"),
-    getJob: () => {
-      const company =
-        document.querySelector("[data-automation-id='jobPostingHeader'] h3")?.innerText?.trim() ||
-        document.title.split(" - ")[1]?.trim() ||
-        document.title.split("|")[1]?.trim();
-
-      const role =
-        document.querySelector("[data-automation-id='jobPostingHeader'] h2")?.innerText?.trim() ||
-        document.querySelector("[data-automation-id='jobPostingHeader'] h1")?.innerText?.trim() ||
-        document.querySelector("h2")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "workday" };
-    },
-    applyButton: () =>
-      document.querySelector("[data-automation-id='applyNowButton']") ||
-      Array.from(document.querySelectorAll("button")).find(b =>
-        b.innerText?.toLowerCase().includes("apply")
-      ),
-  },
-
-  greenhouse: {
-    match: () => window.location.href.includes("greenhouse.io") || window.location.href.includes("boards.greenhouse.io"),
-    getJob: () => {
-      const company =
-        document.querySelector(".company-name")?.innerText?.trim() ||
-        document.querySelector("#header .company-name")?.innerText?.trim() ||
-        document.title.split(" - ")[1]?.trim();
-
-      const role =
-        document.querySelector("h1.app-title")?.innerText?.trim() ||
-        document.querySelector("#header h1")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "greenhouse" };
-    },
-    applyButton: () =>
-      document.querySelector("#submit_app") ||
-      Array.from(document.querySelectorAll("button")).find(b =>
-        b.innerText?.toLowerCase().includes("submit application") ||
-        b.innerText?.toLowerCase().includes("apply")
-      ),
-  },
-
-  lever: {
-    match: () => window.location.href.includes("lever.co") || window.location.href.includes("jobs.lever.co"),
-    getJob: () => {
-      const company =
-        document.querySelector(".main-header-logo img")?.alt?.trim() ||
-        document.querySelector(".main-header-logo")?.innerText?.trim() ||
-        document.title.split(" - ")[1]?.trim();
-
-      const role =
-        document.querySelector(".posting-headline h2")?.innerText?.trim() ||
-        document.querySelector("h2")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "other" };
-    },
-    applyButton: () =>
-      document.querySelector(".postings-btn") ||
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply for this job")
-      ),
-  },
-
-  nhs: {
-    match: () => window.location.href.includes("jobs.nhs.uk"),
-    getJob: () => {
-      const company =
-        document.querySelector("span[class*='caption']")?.innerText?.trim() ||
-        document.querySelector(".nhsuk-caption-l")?.innerText?.trim() ||
-        document.querySelector("[class*='employer']")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "nhs_jobs" };
-    },
-    applyButton: () =>
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply online") ||
-        b.innerText?.toLowerCase().includes("apply for this job")
-      ),
-  },
-
-  civilservice: {
-    match: () => window.location.href.includes("civilservicejobs.service.gov.uk"),
-    getJob: () => {
-      const company =
-        document.querySelector(".org-title")?.innerText?.trim() ||
-        document.querySelector(".department-name")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "civil_service" };
-    },
-    applyButton: () =>
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now") ||
-        b.innerText?.toLowerCase().includes("start application")
-      ),
-  },
-
-  gradcracker: {
-    match: () => window.location.href.includes("gradcracker.com"),
-    getJob: () => {
-      const company =
-        document.querySelector(".company-name")?.innerText?.trim() ||
-        document.querySelector("h2.company")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1.job-title")?.innerText?.trim() ||
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "gradcracker" };
-    },
-    applyButton: () =>
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now")
-      ),
-  },
-
-  brightnetwork: {
-    match: () => window.location.href.includes("brightnetwork.co.uk"),
-    getJob: () => {
-      const company =
-        document.querySelector(".employer-name")?.innerText?.trim() ||
-        document.querySelector("[class*='company']")?.innerText?.trim();
-
-      const role =
-        document.querySelector("h1")?.innerText?.trim();
-
-      return { company, role, job_url: window.location.href, platform: "brightnetwork" };
-    },
-    applyButton: () =>
-      Array.from(document.querySelectorAll("button, a")).find(b =>
-        b.innerText?.toLowerCase().includes("apply now") ||
-        b.innerText?.toLowerCase().includes("apply for role")
-      ),
-  },
-
-};
-
-// ─── Core Logic ─────────────────────────────────────────────────────────────
-
-function detectPlatform() {
-  for (const [name, platform] of Object.entries(platforms)) {
-    if (platform.match()) return { name, ...platform };
+  function isGeneric(str) {
+    const lower = str.toLowerCase().trim()
+    return genericWords.some(w => lower === w || lower.includes(w))
   }
-  return null;
+
+  let parts = title.split("|").map(p => p.trim()).filter(p => p.length > 0)
+
+  if (parts.length <= 1) {
+    parts = title.split(/[-–]/).map(p => p.trim()).filter(p => p.length > 0)
+  }
+
+  if (parts.length === 0) return { role: null, company: null }
+
+  const role = parts[0]
+
+  let company = null
+  for (let i = 1; i < parts.length; i++) {
+    if (!isGeneric(parts[i])) {
+      company = parts[i].replace(/\s*Hub\s*$/i, "").trim()
+      break
+    }
+  }
+
+  return { role, company }
+}
+
+function extractJobInfo() {
+  const url = window.location.href
+  let company = null
+  let role = null
+
+  const platformSelectors = [
+    {
+      match: url.includes("linkedin.com"),
+      company: [
+        ".job-details-jobs-unified-top-card__company-name a",
+        ".job-details-jobs-unified-top-card__company-name",
+        ".jobs-unified-top-card__company-name",
+        ".topcard__org-name-link",
+      ],
+      role: [
+        ".job-details-jobs-unified-top-card__job-title h1",
+        ".jobs-unified-top-card__job-title",
+        "h1.topcard__title",
+        "h1",
+      ]
+    },
+    {
+      match: url.includes("indeed.com"),
+      company: [
+        "[data-testid='inlineHeader-companyName']",
+        "[data-company-name]",
+        ".jobsearch-CompanyInfoWithoutHeaderImage",
+      ],
+      role: [
+        "[data-testid='jobsearch-JobInfoHeader-title']",
+        ".jobsearch-JobInfoHeader-title",
+        "h1",
+      ]
+    },
+    {
+      match: url.includes("reed.co.uk"),
+      company: ["[data-qa='publisher-link']", ".employer-name"],
+      role: ["h1[data-qa='job-title']", "h1"],
+    },
+    {
+      match: url.includes("totaljobs.com"),
+      company: [".job-header__company-name", ".employer-name"],
+      role: ["h1.job-header__title", "h1"],
+    },
+    {
+      match: url.includes("cv-library.co.uk"),
+      company: [".company-name", "[itemprop='hiringOrganization']"],
+      role: ["h1.job-title", "h1"],
+    },
+    {
+      match: url.includes("workday.com") || url.includes("myworkdayjobs.com"),
+      company: () => parseFromTitle().company,
+      role: ["[data-automation-id='jobPostingHeader'] h2", "h1", "h2"],
+    },
+    {
+      match: url.includes("greenhouse.io"),
+      company: [".company-name", "#header .company-name"],
+      role: ["h1.app-title", "#header h1", "h1"],
+    },
+    {
+      match: url.includes("lever.co"),
+      company: [".main-header-logo img", ".main-header-logo"],
+      role: [".posting-headline h2", "h2"],
+    },
+    {
+      match: url.includes("jobs.nhs.uk"),
+      company: [".nhsuk-caption-l", "[class*='employer']"],
+      role: ["h1"],
+    },
+    {
+      match: url.includes("civilservicejobs.service.gov.uk"),
+      company: [".org-title", ".department-name"],
+      role: ["h1"],
+    },
+    {
+      match: url.includes("gradcracker.com"),
+      company: () => parseFromTitle().company,
+      role: ["h1"],
+    },
+    {
+      match: url.includes("brightnetwork.co.uk"),
+      company: [".employer-name", "[class*='company']"],
+      role: ["h1"],
+    },
+    {
+      match: url.includes("amazon.jobs"),
+      company: () => "Amazon",
+      role: ["h1"],
+    },
+    {
+      match: url.includes("oraclecloud.com") || url.includes("taleo.net"),
+      company: () => {
+        const logo = document.querySelector("img[alt]")
+        if (logo?.alt && logo.alt.length < 50 && logo.alt.length > 1) return logo.alt
+        return parseFromTitle().company
+      },
+      role: ["h1", ".jobTitle", "[class*='job-title']"],
+    },
+  ]
+
+  for (const p of platformSelectors) {
+    if (p.match) {
+      if (typeof p.company === "function") {
+        company = p.company()
+      } else {
+        for (const sel of p.company || []) {
+          const el = document.querySelector(sel)
+          if (el) { company = el.innerText?.trim() || el.alt?.trim(); break }
+        }
+      }
+
+      if (typeof p.role === "function") {
+        role = p.role()
+      } else {
+        for (const sel of p.role || []) {
+          const el = document.querySelector(sel)
+          if (el) { role = el.innerText?.trim(); break }
+        }
+      }
+
+      if (company || role) break
+    }
+  }
+
+  if (!company || !role) {
+    const parsed = parseFromTitle()
+    if (!role && parsed.role) role = parsed.role
+    if (!company && parsed.company) company = parsed.company
+  }
+
+  if (!role) role = document.querySelector("h1")?.innerText?.trim()
+  if (!company) {
+    try {
+      company = new URL(url).hostname.replace("www.", "").split(".")[0]
+      company = company.charAt(0).toUpperCase() + company.slice(1)
+    } catch {}
+  }
+
+  return { company, role, job_url: url, platform: "other" }
+}
+
+function isJobPage() {
+  const url = window.location.href.toLowerCase()
+  const title = document.title.toLowerCase()
+
+  const jobKeywords = [
+    "job", "career", "vacancy", "position", "role", "hiring",
+    "recruit", "apply", "internship", "placement", "graduate"
+  ]
+
+  const hasJobUrl = jobKeywords.some(k => url.includes(k))
+  const hasJobTitle = jobKeywords.some(k => title.includes(k))
+  const hasApplyButton = !!Array.from(document.querySelectorAll("button, a")).find(b =>
+    b.innerText?.toLowerCase().includes("apply")
+  )
+
+  return (hasJobUrl || hasJobTitle) && hasApplyButton
 }
 
 function showBanner(message, type = "info") {
-  document.getElementById("applywise-banner")?.remove();
+  document.getElementById("applywise-banner")?.remove()
 
   const colors = {
-    duplicate: "#dc2626",  // red
-    success: "#16a34a",    // green
-    warning: "#d97706",    // amber
-    info: "#2563eb",       // blue
-  };
+    duplicate: "#dc2626",
+    success: "#16a34a",
+    warning: "#d97706",
+    info: "#2563eb",
+  }
 
   const icons = {
     duplicate: "⚠️",
     success: "✅",
     warning: "⚠️",
     info: "ℹ️",
-  };
+  }
 
-  const banner = document.createElement("div");
-  banner.id = "applywise-banner";
+  const banner = document.createElement("div")
+  banner.id = "applywise-banner"
   banner.style.cssText = `
     position: fixed;
     top: 0;
@@ -313,7 +237,7 @@ function showBanner(message, type = "info") {
     background: ${colors[type] || colors.info};
     color: white;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  `;
+  `
 
   banner.innerHTML = `
     <span>${icons[type]} ApplyWise: ${message}</span>
@@ -327,24 +251,21 @@ function showBanner(message, type = "info") {
       cursor: pointer;
       font-size: 12px;
     ">Dismiss</button>
-  `;
+  `
 
-  document.body.prepend(banner);
+  document.body.prepend(banner)
 
   if (type !== "duplicate") {
-    setTimeout(() => banner.remove(), 6000);
+    setTimeout(() => banner.remove(), 6000)
   }
 }
 
-async function getToken() {
-  return new Promise(resolve => {
-    chrome.runtime.sendMessage({ type: "GET_TOKEN" }, res => resolve(res?.token || null));
-  });
-}
-
-async function checkForDuplicate(platform, jobInfo) {
-  const token = await getToken();
-  if (!token) return;
+async function checkForDuplicate(jobInfo) {
+  const token = await getToken()
+  if (!token) {
+    console.log("ApplyWise: no token found, user not logged in")
+    return
+  }
 
   try {
     const response = await fetch(`${API_URL}/duplicate/check`, {
@@ -354,23 +275,30 @@ async function checkForDuplicate(platform, jobInfo) {
         "Authorization": `Bearer ${token}`,
       },
       body: JSON.stringify(jobInfo),
-    });
+    })
 
-    if (!response.ok) return;
-    const result = await response.json();
+    if (!response.ok) {
+      console.log("ApplyWise: duplicate check failed", response.status)
+      return
+    }
+
+    const result = await response.json()
+    console.log("ApplyWise duplicate check result:", result)
 
     if (result.is_duplicate) {
-      showBanner(result.message, "duplicate");
+      showBanner(result.message, "duplicate")
+    } else {
+      console.log("ApplyWise: no duplicate found for", jobInfo.company, "-", jobInfo.role)
     }
 
   } catch (error) {
-    console.log("ApplyWise: could not reach API", error);
+    console.log("ApplyWise: could not reach API", error)
   }
 }
 
-async function trackApplication(platform, jobInfo) {
-  const token = await getToken();
-  if (!token) return;
+async function trackApplication(jobInfo) {
+  const token = await getToken()
+  if (!token) return
 
   try {
     const response = await fetch(`${API_URL}/applications/`, {
@@ -386,73 +314,67 @@ async function trackApplication(platform, jobInfo) {
         job_url: jobInfo.job_url,
         status: "applied",
       }),
-    });
+    })
 
     if (response.ok) {
-      showBanner(`Tracked! ${jobInfo.role} at ${jobInfo.company} saved to ApplyWise.`, "success");
+      showBanner(`Tracked! ${jobInfo.role} at ${jobInfo.company} saved to ApplyWise.`, "success")
     }
 
   } catch (error) {
-    console.log("ApplyWise: could not track application", error);
+    console.log("ApplyWise: could not track application", error)
   }
 }
 
-function watchApplyButton(platform) {
+function watchApplyButton(jobInfo) {
   const checkButton = () => {
-    const btn = platform.applyButton?.();
-    if (!btn || btn.dataset.applywiseWatched) return;
+    const btn = Array.from(document.querySelectorAll("button, a")).find(b =>
+      b.innerText?.toLowerCase().includes("apply") &&
+      !b.dataset.applywiseWatched
+    )
 
-    btn.dataset.applywiseWatched = "true";
+    if (!btn) return
+    btn.dataset.applywiseWatched = "true"
 
     btn.addEventListener("click", async () => {
-      await new Promise(r => setTimeout(r, 1500)); // wait for page to process
-      const jobInfo = platform.getJob();
-      if (jobInfo.company && jobInfo.role) {
-        await trackApplication(platform, jobInfo);
+      await new Promise(r => setTimeout(r, 1500))
+      const updatedInfo = extractJobInfo()
+      if (updatedInfo.company && updatedInfo.role) {
+        await trackApplication(updatedInfo)
       }
-    });
-  };
+    })
+  }
 
-  // Check immediately and keep checking as page loads
-  checkButton();
-  setTimeout(checkButton, 2000);
-  setTimeout(checkButton, 4000);
+  checkButton()
+  setTimeout(checkButton, 2000)
+  setTimeout(checkButton, 4000)
 }
 
 async function init() {
-  const platform = detectPlatform();
-  if (!platform) return;
+  await new Promise(resolve => setTimeout(resolve, 2500))
 
-  // Wait for page to fully load
-  await new Promise(resolve => setTimeout(resolve, 2500));
+  if (!isJobPage()) {
+    console.log("ApplyWise: not a job page, skipping")
+    return
+  }
 
-  const jobInfo = platform.getJob();
-
-  console.log("ApplyWise detected:", platform.name, jobInfo);
+  const jobInfo = extractJobInfo()
+  console.log("ApplyWise detected job:", jobInfo)
 
   if (!jobInfo.company && !jobInfo.role) {
-    console.log("ApplyWise: could not extract job info from page");
-    return;
+    console.log("ApplyWise: could not extract job info")
+    return
   }
 
-  // Check for duplicates when visiting a job page
-  if (jobInfo.company && jobInfo.role) {
-    await checkForDuplicate(platform, jobInfo);
-  }
-
-  // Watch for apply button clicks to auto-track
-  watchApplyButton(platform);
+  await checkForDuplicate(jobInfo)
+  watchApplyButton(jobInfo)
 }
 
-// ─── Run ────────────────────────────────────────────────────────────────────
+init()
 
-init();
-
-// Re-run on URL changes (for single-page apps like LinkedIn)
-let lastUrl = location.href;
+let lastUrl = location.href
 new MutationObserver(() => {
   if (location.href !== lastUrl) {
-    lastUrl = location.href;
-    setTimeout(init, 2000);
+    lastUrl = location.href
+    setTimeout(init, 2000)
   }
-}).observe(document, { subtree: true, childList: true });
+}).observe(document, { subtree: true, childList: true })

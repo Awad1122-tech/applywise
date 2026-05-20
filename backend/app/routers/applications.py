@@ -88,7 +88,7 @@ def get_analytics(
         by_status[a.status.value] = by_status.get(a.status.value, 0) + 1
         by_platform[a.platform.value] = by_platform.get(a.platform.value, 0) + 1
 
-        if a.status in (ApplicationStatus.in_process, ApplicationStatus.selected):
+        if a.status in (ApplicationStatus.in_process, ApplicationStatus.selected, ApplicationStatus.rejected):
             responded += 1
 
         applied = a.applied_at

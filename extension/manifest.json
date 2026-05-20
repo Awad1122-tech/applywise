@@ -1,48 +1,22 @@
 {
   "manifest_version": 3,
   "name": "ApplyWise",
-  "version": "1.1",
-  "description": "Never apply to the same job twice — cross-platform duplicate detection",
+  "version": "1.2",
+  "description": "Never apply to the same job twice — duplicate detection on every job site",
   "permissions": [
     "storage",
     "activeTab"
   ],
   "host_permissions": [
     "http://127.0.0.1:8001/*",
-    "https://*.linkedin.com/*",
-    "https://*.indeed.com/*",
-    "https://*.reed.co.uk/*",
-    "https://*.totaljobs.com/*",
-    "https://*.cv-library.co.uk/*",
-    "https://*.workday.com/*",
-    "https://*.greenhouse.io/*",
-    "https://*.lever.co/*",
-    "https://jobs.lever.co/*",
-    "https://www.jobs.nhs.uk/*",
-    "https://www.civilservicejobs.service.gov.uk/*",
-    "https://*.gradcracker.com/*",
-    "https://*.brightnetwork.co.uk/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://*.linkedin.com/*",
-        "https://*.indeed.com/*",
-        "https://*.reed.co.uk/*",
-        "https://*.totaljobs.com/*",
-        "https://*.cv-library.co.uk/*",
-        "https://*.workday.com/*",
-        "https://*.greenhouse.io/*",
-        "https://*.lever.co/*",
-        "https://jobs.lever.co/*",
-        "https://www.jobs.nhs.uk/*",
-        "https://www.civilservicejobs.service.gov.uk/*",
-        "https://*.gradcracker.com/*",
-        "https://*.brightnetwork.co.uk/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
