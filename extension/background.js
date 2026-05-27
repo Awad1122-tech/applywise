@@ -1,4 +1,3 @@
-// Keep service worker alive
 const keepAlive = () => setInterval(chrome.runtime.getPlatformInfo, 20000)
 chrome.runtime.onStartup.addListener(keepAlive)
 keepAlive()
@@ -22,6 +21,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "CLEAR_TOKEN") {
     chrome.storage.local.remove(["token"], () => {
       sendResponse({ success: true })
+    })
+    return true
+  }
+
+  if (message.type === "GET_PAGE_DATA") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) { sendResponse({ error: "no tab" }); return }
+      chrome.tabs.sendMessage(tabs[0].id, { type: "EXTRACT_PAGE_DATA" }, (response) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ error: chrome.runtime.lastError.message })
+        } else {
+          sendResponse(response)
+        }
+      })
     })
     return true
   }

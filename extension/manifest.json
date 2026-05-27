@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
   "name": "ApplyWise",
-  "version": "1.2",
-  "description": "Never apply to the same job twice — duplicate detection on every job site",
+  "version": "2.0",
+  "description": "Never apply to the same job twice",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8001/*",
-    "<all_urls>"
+    "http://127.0.0.1:8001/*"
   ],
   "background": {
     "service_worker": "background.js"
