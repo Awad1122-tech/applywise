@@ -11,12 +11,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREDENTIALS_FILE = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_FILE = os.path.join(BASE_DIR, "token.json")
 
-# Use environment variable — works both locally and in production
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8001")
-REDIRECT_URI = f"{BACKEND_URL}/gmail/oauth/callback"
+REDIRECT_URI = f"{settings.backend_url}/gmail/oauth/callback"
 
 # Allow OAuth over HTTP for local development only
-if os.getenv("APP_ENV") != "production":
+if settings.app_env != "production":
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 

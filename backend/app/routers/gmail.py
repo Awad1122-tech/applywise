@@ -11,6 +11,7 @@ from app.gmail_auth import (
 from app.models import ApplicationStatus, Platform, User
 from app.routers.auth import get_current_user
 from app.database import get_db
+from app.config import settings
 from sqlalchemy.orm import Session
 from rapidfuzz import fuzz
 import re
@@ -123,10 +124,10 @@ def oauth_callback(code: str, state: str = None, db: Session = Depends(get_db)):
             user.gmail_token = token_json
             db.commit()
             print(f"Token saved for: {user.email}")
-        return RedirectResponse(url="http://localhost:5173?gmail=connected")
+        return RedirectResponse(url=f"{settings.frontend_url}?gmail=connected")
     except Exception as e:
         print(traceback.format_exc())
-        return RedirectResponse(url=f"http://localhost:5173?gmail=error&message={str(e)}")
+        return RedirectResponse(url=f"{settings.frontend_url}?gmail=error&message={str(e)}")
 
 
 @router.post("/authenticate")

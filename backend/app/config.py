@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 10080
     app_env: str = "development"
     frontend_url: str = "http://localhost:5173"
+    backend_url: str = "http://localhost:8001"
     anthropic_api_key: str = ""
 
     class Config:
