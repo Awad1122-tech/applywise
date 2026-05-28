@@ -1,8 +1,12 @@
 {
-  "rewrites": [
+  "routes": [
     {
-      "source": "/((?!google1401e11342836e7d\\.html).*)",
-      "destination": "/"
+      "src": "/google1401e11342836e7d.html",
+      "dest": "/google1401e11342836e7d.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
