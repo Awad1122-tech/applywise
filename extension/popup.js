@@ -1,4 +1,4 @@
-const API = "http://127.0.0.1:8001";
+const API = "https://applywise-backend-i7ki.onrender.com";
 
 async function getToken() {
   return new Promise(resolve => {
@@ -283,10 +283,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Open dashboard
   document.getElementById("go-dashboard-btn").addEventListener("click", () => {
-    chrome.tabs.create({ url: "http://localhost:5173" });
+    chrome.tabs.create({ url: "https://applywise-awads-projects-fee6fdb2.vercel.app" });
   });
   document.getElementById("go-dashboard-btn2").addEventListener("click", () => {
-    chrome.tabs.create({ url: "http://localhost:5173" });
+    chrome.tabs.create({ url: "https://applywise-awads-projects-fee6fdb2.vercel.app" });
   });
 
   // Logout
