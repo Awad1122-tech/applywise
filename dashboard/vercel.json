@@ -1,5 +1,8 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/((?!google1401e11342836e7d\\.html).*)",
+      "destination": "/"
+    }
   ]
 }
