@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
+const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001'
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -14,12 +16,12 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      const res = await axios.post('http://127.0.0.1:8001/auth/login',
+      const res = await axios.post(`${API}/auth/login`,
         new URLSearchParams({ username: email, password }),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       )
       localStorage.setItem('token', res.data.access_token)
-      navigate('/')
+      navigate('/dashboard')
     } catch {
       setError('Incorrect email or password')
     } finally {

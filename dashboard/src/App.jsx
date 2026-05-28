@@ -3,6 +3,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Privacy from './pages/Privacy'
+import Landing from './pages/Landing'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -13,10 +14,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/privacy" element={<Privacy />} />
-        <Route path="/" element={
+        <Route path="/dashboard" element={
           <PrivateRoute>
             <Dashboard />
           </PrivateRoute>
