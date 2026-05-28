@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Privacy from './pages/Privacy'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -14,6 +15,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/" element={
           <PrivateRoute>
             <Dashboard />
